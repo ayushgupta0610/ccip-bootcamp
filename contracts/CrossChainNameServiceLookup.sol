@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.19;
 
+import {console} from "hardhat/console.sol";
 import {OwnerIsCreator} from "@chainlink/contracts-ccip/src/v0.8/shared/access/OwnerIsCreator.sol";
 
 /**
@@ -19,6 +20,8 @@ contract CrossChainNameServiceLookup is OwnerIsCreator {
     error AlreadyTaken();
 
     modifier onlyCrossChainNameService() {
+        console.log("msg.sender: %s", msg.sender);
+        console.log("s_crossChainNameService: %s", s_crossChainNameService);
         if (msg.sender != s_crossChainNameService) revert Unauthorized();
         _;
     }
