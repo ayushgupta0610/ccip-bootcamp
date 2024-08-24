@@ -107,7 +107,7 @@ describe("CrossChainNameService", function () {
   describe("Register and lookup on the receiver chain", function () {
     it("Should fetch alice's address when sent cross chain", async function () {
 
-      const gasLimit = 5000_000; // manual gas limit (increase if needed)
+      const gasLimit = 200_000; // manual gas limit (increase if needed)
       // Call the enableChain() function of the CrossChainNameServiceRegister.sol smart contract instance
       await crossChainNameServiceRegister.connect(owner).enableChain(sourceChainSelector, crossChainNameServiceReceiver.address, gasLimit);
 
