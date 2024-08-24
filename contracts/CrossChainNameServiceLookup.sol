@@ -20,8 +20,6 @@ contract CrossChainNameServiceLookup is OwnerIsCreator {
     error AlreadyTaken();
 
     modifier onlyCrossChainNameService() {
-        console.log("msg.sender: %s", msg.sender);
-        console.log("s_crossChainNameService: %s", s_crossChainNameService);
         if (msg.sender != s_crossChainNameService) revert Unauthorized();
         _;
     }

@@ -13,6 +13,7 @@ describe("CrossChainNameService", function () {
   let crossChainNameServiceRegister: CrossChainNameServiceRegister;
   let crossChainNameServiceReceiver: CrossChainNameServiceReceiver;
   let crossChainNameServiceLookup: CrossChainNameServiceLookup;
+  let lookupDestinationChain: CrossChainNameServiceLookup;
   let owner: SignerWithAddress;
   let alice: SignerWithAddress;
   let bob: SignerWithAddress;
@@ -20,6 +21,7 @@ describe("CrossChainNameService", function () {
   let sourceRouter: string;
   let destinationRouter: string;
   const FAUCET_AMOUNT = 10 * 10 ** 18;
+  const ZERO_ADDRESS = ethers.constants.AddressZero;
 
   beforeEach(async function () {
     const signers = await ethers.getSigners();
@@ -58,50 +60,67 @@ describe("CrossChainNameService", function () {
     );
     crossChainNameServiceLookup = await CrossChainNameServiceLookup.deploy();
     console.log("CrossChainNameServiceLookup deployed to:", crossChainNameServiceLookup.address);
+    
     const CrossChainNameServiceRegister = await ethers.getContractFactory(
       "CrossChainNameServiceRegister",
     );
     crossChainNameServiceRegister = await CrossChainNameServiceRegister.deploy(sourceRouter, crossChainNameServiceLookup.address);
     console.log("CrossChainNameServiceRegister deployed to:", crossChainNameServiceRegister.address);
-    console.log("crossChainNameServiceRegister owner:", await crossChainNameServiceRegister.owner());
-    // const CrossChainNameServiceReceiver = await ethers.getContractFactory(
-    //     "CrossChainNameServiceReceiver",
-    //     { signer: owner }
-    // );
-    // crossChainNameServiceReceiver = await CrossChainNameServiceReceiver.deploy(destinationRouter, crossChainNameServiceLookup.address, sourceChainSelector);
-    // console.log("CrossChainNameServiceReceiver deployed to:", crossChainNameServiceReceiver.address);
-
-    // const gasLimit = 5000_000; // manual gas limit (increase if needed)
-    // // Call the enableChain() function of the CrossChainNameServiceRegister.sol smart contract instance and provide the sourceChainSelector and sourceRouter as function arguments.
-    // await crossChainNameServiceRegister.enableChain(sourceChainSelector, crossChainNameServiceReceiver.address, gasLimit, { from: owner.address });
-
+    
     // Call the setCrossChainNameServiceAddress function of the CrossChainNameServiceLookup.sol smart contract "source" instance and provide the address of the CrossChainNameServiceRegister.sol smart contract instance. 
     await crossChainNameServiceLookup.connect(owner).setCrossChainNameServiceAddress(crossChainNameServiceRegister.address);
-    console.log("Did the 1 transactions succeed?");
+
+    const LookupDestinationChain = await ethers.getContractFactory(
+        "CrossChainNameServiceLookup",
+        { signer: owner }
+    );
+    lookupDestinationChain = await LookupDestinationChain.deploy();
+    console.log("lookupDestinationChain deployed to:", lookupDestinationChain.address);
+
+    const CrossChainNameServiceReceiver = await ethers.getContractFactory(
+        "CrossChainNameServiceReceiver",
+        { signer: owner }
+    );
+    crossChainNameServiceReceiver = await CrossChainNameServiceReceiver.deploy(destinationRouter, lookupDestinationChain.address, sourceChainSelector);
+    console.log("CrossChainNameServiceReceiver deployed to:", crossChainNameServiceReceiver.address);
+
+    // Call the setCrossChainNameServiceAddress function of the CrossChainNameServiceLookup.sol smart contract "source" instance and provide the address of the CrossChainNameServiceRegister.sol smart contract instance. 
+    await lookupDestinationChain.connect(owner).setCrossChainNameServiceAddress(crossChainNameServiceReceiver.address);
     
-    // Repeat the process for the CrossChainNameServiceLookup.sol smart contract "receiver" instance and provide the address of the CrossChainNameServiceReceiver.sol smart contract instance.
-    // await crossChainNameServiceLookup.setCrossChainNameServiceAddress(crossChainNameServiceReceiver.address, { from: owner.address });
-
-    // Call the register() function and provide “alice.ccns” and Alice’s EOA address as function arguments.
-    // TODO: Check if the below function needs to be called by alice instead on crossChainNameServiceRegister contract
-    await crossChainNameServiceRegister.connect(alice).register("alice.ccns");
-    console.log("Did the 2 transactions succeed?");
-
-    // Call the lookup() function and provide “alice.ccns” as a function argument. Assert that the returned address is Alice’s EOA address.
-    const aliceAddress = await crossChainNameServiceLookup.lookup("alice.ccns");
-    console.log("aliceAddress:", aliceAddress);
-    console.log("alice:", await alice.getAddress());
   });
 
-  describe("Register and Lookup", function () {
-    it("Should register ccns name of the user", async function () {
-        console.log("alice:", await alice.getAddress());
-    });
+  describe("Register and lookup on the same chain", function () {
+    it("Should fetch alice's address when registered the ccns name", async function () {
+      
+        // Call the register() function and provide “alice.ccns” and Alice’s EOA address as function arguments.
+        await crossChainNameServiceRegister.connect(alice).register("alice.ccns");
 
-    // it("Should fetch alice's address when registered the ccns name", async function () {
-    //   const ownerBalance = await token.balanceOf(owner.address);
-    //   expect(await token.totalSupply()).to.equal(ownerBalance);
-    // });
+        // Call the lookup() function and provide “alice.ccns” as a function argument. Assert that the returned address is Alice’s EOA address.
+        const aliceAddress = await crossChainNameServiceLookup.lookup("alice.ccns");
+        const aliceAddressOnDestinationChain = await lookupDestinationChain.lookup("alice.ccns");
+
+        expect(aliceAddress).to.equal(await alice.getAddress());
+        expect(aliceAddressOnDestinationChain).to.equal(ZERO_ADDRESS);
+    });
+  });
+
+  describe("Register and lookup on the receiver chain", function () {
+    it("Should fetch alice's address when sent cross chain", async function () {
+
+      const gasLimit = 5000_000; // manual gas limit (increase if needed)
+      // Call the enableChain() function of the CrossChainNameServiceRegister.sol smart contract instance
+      await crossChainNameServiceRegister.connect(owner).enableChain(sourceChainSelector, crossChainNameServiceReceiver.address, gasLimit);
+
+      // Call the register() function and provide “alice.ccns” and Alice’s EOA address as function arguments.
+      await crossChainNameServiceRegister.connect(alice).register("alice.ccns");
+
+      // Call the lookup() function and provide “alice.ccns” as a function argument. Assert that the returned address is Alice’s EOA address.
+      const aliceAddress = await crossChainNameServiceLookup.lookup("alice.ccns");
+      const aliceAddressOnDestinationChain = await lookupDestinationChain.lookup("alice.ccns");
+
+      expect(aliceAddress).to.equal(await alice.getAddress());
+      expect(aliceAddressOnDestinationChain).to.equal(await alice.getAddress());
+    });
   });
 
   
